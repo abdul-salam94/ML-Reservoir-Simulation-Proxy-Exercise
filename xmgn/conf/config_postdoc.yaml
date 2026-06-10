@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: Apache-2.0
+# =====================================================================
+# Final assessment config — X-MeshGraphNet surrogate on the Norne field
+# Author: Dr. Montaser Ramadan
+#
+# Base: conf/config_norne.yaml (NVIDIA canonical Norne setup).
+# Every deviation from that baseline is marked  # [CHANGED: <reason>]
+# and explained in the writeup (§ "Config changes & reasoning").
+# =====================================================================
+
+hydra:
+  job:
+    chdir: true
+    name: XMGN_Norne_PostDoc          # [CHANGED: distinct job/output name]
+  run:
+    dir: ./outputs/${hydra:job.name}
+
+runspec:
+  job_name: ${hydra:job.name}
+  description: "Norne X-MGN surrogate — post-doc assessment (Ramadan)"
+
+# ┌───────────────────────────────────────────┐
+# │            Dataset Configuration          │
+# └───────────────────────────────────────────┘
+dataset:
+  simulator: ECLIPSE                  # [CHANGED: OPM->ECLIPSE; bundle was run through Eclipse per data/README.md]
+  sim_dir: /workspace/data/NORNE_LHS  # [CHANGED: persistent /workspace volume (survives pod migration); NOT /root (30GB overlay) and NOT a /mnt mount (SETUP §5)]
+  # num_samples: 5                    # uncomment for the 5-case end-to-end smoke test, then re-comment
+
+  graph:
+    node_features:
+      static: ["PERMX", "PORV", "X", "Y", "Z"]
+      dynamic:
+        variables: ["PRESSURE", "SWAT", "WCID"]
+        prev_timesteps: 2             # current + 2 priors (65 ts/case — plenty of history)
+    edge_features: ["TRANX", "TRANY", "TRANZ", "TRANNNC"]   # TRANNNC carries the fault NNCs — the whole point on Norne
+    global_features:
+      delta_t: true
+      time: true
+    target_vars:
+      node_features: ["PRESSURE", "SWAT"]
+      weights: [1.0, 1.0]
+      loss_functions: ["L2", "L1"]
+    nonlinear_scaling: ["PERMX:LOG10", "TRAN:LOG10"]   # permeability spans ~6 orders of magnitude
+
+# ┌───────────────────────────────────────────┐
+# │            Data Preprocessing             │
+# └───────────────────────────────────────────┘
+preprocessing:
+  skip_graphs: false
+  num_partitions: 3
+  halo_size: 5
+  num_preprocess_workers: 8
+  data_split:
+    train_ratio: 0.8                  # ~48 cases  (MANDATED by TASK.md §4)
+    val_ratio:   0.1                  # ~6 cases
+    test_ratio:  0.1                  # ~6 cases
+    random_seed: 42                   # [CHANGED: stated explicitly — mandated + documented in writeup]
+
+# ┌───────────────────────────────────────────┐
+# │           Model Configuration             │
+# └───────────────────────────────────────────┘
+model:
+  num_message_passing_layers: 5       # canonical Norne depth (fits 8GB; comfortable on 24GB 4090)
+  hidden_dim: 128
+  activation: silu
+
+# ┌───────────────────────────────────────────┐
+# │          Training Configuration           │
+# └───────────────────────────────────────────┘
+training:
+  num_epochs: 150                     # [CHANGED: 1000->150 — CosineAnnealingLR uses T_max=num_epochs, so the LR
+                                      #  must fully anneal WITHIN the run budget. 150 epochs (~9h @ 3.5min/epoch on
+                                      #  one RTX 4090) lets the cosine schedule complete AND is ample for 48-case
+                                      #  convergence (val loss already dropping fast). Early stopping (patience 40)
+                                      #  is the backup. 300+ would risk a ~17h run with the LR never fully decaying.]
+  batch_size: 1                       # GNN constraint in xmgn (one graph/partition at a time)
+  start_lr: 1e-3
+  end_lr: 1e-6
+  weight_decay: 1e-3
+  validation_freq: 5
+  resume: false                       # flip true to resume after an interruption
+  early_stopping:
+    patience: 40                      # [CHANGED: 20->40 epochs — don't cut the cosine anneal short; let LR decay matter]
+    min_delta: 1e-6
+
+# ┌───────────────────────────────────────────┐
+# │        Performance Optimization           │
+# └───────────────────────────────────────────┘
+performance:
+  use_concat_trick: true
+  checkpoint_segments: 2
+  enable_cudnn_benchmark: true
+
+# ┌───────────────────────────────────────────┐
+# │        Inference Configuration            │
+# └───────────────────────────────────────────┘
+inference:
+  checkpoint_path: null               # null -> auto-select best from best_checkpoints/
+  model_path: null
