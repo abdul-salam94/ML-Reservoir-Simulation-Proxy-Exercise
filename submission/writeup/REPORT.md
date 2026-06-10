@@ -83,7 +83,10 @@
 - **Convergence:** the single-step validation loss falls smoothly and monotonically; the cosine LR
   reaches ~1e-6 by epoch 150 and the curve has clearly flattened. **Best val loss 2.065e-3** at
   epoch 150 (early stopping never triggered — the run used its full budget by design).
-- **Single-step validation curve (denormalised, teacher-forced):**
+
+![Run-1 training: train and validation loss (log scale) and the cosine LR schedule over 150 epochs. Train and validation track closely (no overfitting); the LR fully anneals from 1e-3 to ~1e-6.](../inference/loss_curve.png)
+
+- **Single-step validation metrics at checkpoints (denormalised, teacher-forced):**
 
   | Epoch | val_loss | PRESSURE RMSE (bar) | SWAT RMSE |
   |---:|---:|---:|---:|
@@ -103,12 +106,13 @@ Two regimes, and the distinction matters:
 - **Single-step (teacher-forced):** PRESSURE **0.889 bar**, SWAT **0.0029** RMSE (epoch-150 validation
   above) — the model is an excellent one-step operator.
 - **Fully autoregressive (62-step rollout; 3 true steps, then the model's own output is fed back):**
-  aggregated over the 6 test cases, in **physical units**:
+  aggregated over the 6 test cases, in **normalised and physical units** (normalised = physical ÷
+  per-variable std from `global_stats.json`: PRESSURE std 48.79 bar, SWAT std 0.357):
 
-  | Variable | RMSE (norm) | RMSE (phys) | MAE (phys) | worst case |
-  |---|---:|---:|---:|---:|
-  | PRESSURE | 1.41e-2 | **9.27 bar** (≈3.3 % of ~278 bar) | 4.64 bar | 9.86 bar (NORNE_002) |
-  | SWAT | 8.1e-3 | **0.0128** | 0.0030 | 0.0132 (NORNE_016) |
+  | Variable | RMSE (norm) | MAE (norm) | RMSE (phys) | MAE (phys) | worst case (RMSE phys) |
+  |---|---:|---:|---:|---:|---:|
+  | PRESSURE | 0.190 | 0.095 | **9.27 bar** (≈3.3 % of ~278 bar) | 4.64 bar | 9.86 bar (NORNE_002) |
+  | SWAT | 0.0358 | 0.0085 | **0.0128** | 0.0030 | 0.0132 (NORNE_016) |
 
 - **Autoregressive drift (error vs rollout step):** *non-monotonic.* PRESSURE RMSE climbs from
   0.27 bar at step 3 to a **peak ~12.2 bar at step 13**, recovers to ~3.8 bar by step 23, then drifts
