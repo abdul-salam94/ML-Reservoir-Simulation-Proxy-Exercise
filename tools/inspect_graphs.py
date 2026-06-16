@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 import numpy as np
 
-GRAPHS_DIR = Path(r"D:\NORNE\completed.dataset\XMGN_Norne_PipelineTest_60\graphs")
+GRAPHS_DIR = Path(r"/home/silver/completed.dataset/XMGN_2D_Q5SP_Waterflood/graphs")
 
 # Pick a handful of files from different cases/timesteps
 all_files = sorted(GRAPHS_DIR.glob("*.pt"))
@@ -31,7 +31,7 @@ for idx in sample_indices:
     print(f"\nAll attributes stored on this graph:")
     for k, v in g.items():
         if isinstance(v, torch.Tensor):
-            print(f"  {k:25s}  shape={tuple(v.shape):<18}  dtype={str(v.dtype):14s}  is_node_attr={g.is_node_attr(k)}  is_edge_attr={g.is_edge_attr(k)}")
+            print(f"  {k:25s}  shape={str(tuple(v.shape)):<18}  dtype={str(v.dtype):14s}  is_node_attr={g.is_node_attr(k)}  is_edge_attr={g.is_edge_attr(k)}")
         else:
             print(f"  {k:25s}  type={type(v).__name__}  value={v}")
 
